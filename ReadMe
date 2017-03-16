@@ -1,0 +1,8 @@
+BUILD
+
+To build executable files you can use cmake files placed in /server and /client or Makefile placed in the head directory.
+
+FLAGS
+
+Use -t or --tcp flags to run client in TCP mode
+Use -u or --udp flags to run client in UDP mode

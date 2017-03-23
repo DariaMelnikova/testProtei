@@ -6,143 +6,71 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <cstring>
+#include "client_socket.hpp"
+
 
 using namespace std;
 
 
-void udp_connect(int port)
+
+int main(int argc, char * argv[])
 {
-	int client;
-	client = socket(AF_INET, SOCK_DGRAM, 0);
-	if (client == -1)
+	int port = 2046;
+
+	if (argc < 2)
 	{
-		exit(1);
+		throw client_error("Not enough arguments");
 	}
 
-	struct sockaddr_in client_sock;
-	client_sock.sin_family = AF_INET;
-    client_sock.sin_port = htons(port);
-    client_sock.sin_addr.s_addr = htons(INADDR_ANY);
+	Client_socket * sock = new TCP_client_socket(port);
 
-	cout << "Send \"quit\" to quit" << endl;
-
-	socklen_t s_len = sizeof(client_sock);
-
-	string buffer;
-	int sent, recieved, msg_size, net_size;
-	while(1)
+	if (argv[1] == string("-u") || argv[1] == string("--udp"))
 	{
-		sent = 0;
-		recieved = 0;
-		getline(cin, buffer);
-		msg_size = buffer.size() + 1;
-		net_size = htonl(msg_size);
-
-		sendto(client, (const char *)&net_size, sizeof(net_size), 0, (struct sockaddr *)&client_sock, s_len);
-
-		
-			while (sent < msg_size)
-			{
-				sent += sendto(client, &buffer[0] + sent, msg_size - sent, 0, (struct sockaddr *)&client_sock, s_len);	
-			}
-
-			if (buffer == "quit")
-			{
-				cout << "Connection closed" << endl;
-				break;
-			}	
-
-			char * rec_msg = new char[msg_size];
-			char rec_buf[65560]; 
-			while (recieved < msg_size)
-			{
-				recieved += recvfrom(client, rec_buf, msg_size - recieved, 0, (struct sockaddr *)&client_sock, &s_len);
-				strcpy(rec_msg, rec_buf);
-			}
-			cout << rec_msg << endl;
-			delete[] rec_msg;
+		sock->sock_send("u");
+		sock->sock_close();
+		delete sock;
+		sock = new UDP_client_socket(port);
+	}
+	else if (argv[1] == string("-t") || argv[1] == string("--tcp"))
+	{
+		sock->sock_send("t");
+	}
+	else
+	{
+		sock->sock_close();
+		throw client_error("Wrong arguments");
 	}
 
-	close(client);
-}
-
-void tcp_connect(int port, int client)
-{
-	cout << "Send \"quit\" to quit" << endl;
+	cout << "You are connected now. Send \"quit\" to quit" << endl;
 	
 	string buffer;
-	int msg_size, net_size;
 
 	while(1)
 	{
+		char * rec_msg;
 		getline(cin, buffer);
-		msg_size = buffer.size() + 1;
-		net_size = htonl(msg_size);
-		send(client, (const char *)&net_size, sizeof(net_size), 0);
-		send(client, &buffer[0], msg_size, 0);
+		sock->sock_send(buffer);
+
 		if (buffer == "quit")
 		{
 			cout << "Connection closed" << endl;
 			break;
 		}
-		
-		char * rec_msg = new char[msg_size];
-		recv(client, rec_msg, msg_size, 0);
-		cout << rec_msg << endl;
-		delete[] rec_msg;
+
+		try 
+		{
+			rec_msg = new char[buffer.size() + 1];
+			sock->sock_recieve(rec_msg, buffer.size() + 1);
+			cout << rec_msg << endl;
+			delete[] rec_msg;
+		} 
+		catch (client_error const& err)
+		{
+			delete[] rec_msg;
+		}
 	}
 
-}
-
-
-int main(int argc, char * argv[])
-{
-	int client;
-	int port = 2046;
-
-	if (argc < 1)
-	{
-		cout << "Wrong input" << endl;
-		exit(1);
-	}
-
-	client = socket(AF_INET, SOCK_STREAM, 0);
-	if (client == -1)
-	{
-		exit(1);
-	}
-
-	struct sockaddr_in client_sock;
-	client_sock.sin_family = AF_INET;
-    client_sock.sin_port = htons(port);
-    client_sock.sin_addr.s_addr = htons(INADDR_ANY);
-
-	struct sockaddr * client_addr = (struct sockaddr*)&client_sock;
-	if (connect(client, client_addr, sizeof(client_sock)) == -1)
-	{
-		cout << "Connection error" << endl;
-		close(client);
-		exit(1);
-	}	
-
-	if (argv[1] == string("-u") || argv[1] == string("--udp"))
-	{
-		send(client, "u", 2, 0);
-		close(client);
-		udp_connect(port);
-	}
-	else if (argv[1] == string("-t") || argv[1] == string("--tcp"))
-	{
-		send(client, "t", 2, 0);
-		tcp_connect(port, client);
-		close(client);
-	}
-	else
-	{
-		cout << "Wrong arguments" << endl;
-		close(client);
-		exit(1);
-	}
-	
+	sock->sock_close();
+	delete sock;
 	return 0;
 }
